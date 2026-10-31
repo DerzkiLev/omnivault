@@ -2157,6 +2157,10 @@
         filterFormatLabel: "Format / Type",
         sortByLabel: "Sort By",
         statusAll: "All Statuses",
+        statusWatching: "Watching",
+        statusPlaying: "Playing",
+        statusReading: "Reading",
+        statusActiveAll: "Watching / Playing / Reading",
         statusCompleted: "Completed",
         statusPlanned: "Planned",
         statusOnHold: "On Hold",
@@ -2339,6 +2343,10 @@
         filterFormatLabel: "Формат / Тип",
         sortByLabel: "Сортировка",
         statusAll: "Все статусы",
+        statusWatching: "Смотрю",
+        statusPlaying: "Играю",
+        statusReading: "Читаю",
+        statusActiveAll: "Смотрю / Играю / Читаю",
         statusCompleted: "Завершено",
         statusPlanned: "В планах",
         statusOnHold: "Заморожено",
@@ -3198,14 +3206,29 @@
         return g;
       },
 
-      tStatus(status) {
+      normalizeStatus(status) {
+        if (status === 'Playing' || status === 'Reading' || status === 'Watching') {
+          return 'Watching';
+        }
+        return status || 'Completed';
+      },
+
+      tStatus(status, category = null) {
+        const norm = this.normalizeStatus(status);
+        if (norm === 'Watching') {
+          const targetCat = category || (this.activeCategory === 'leaderboard' ? this.leaderboardScope : this.activeCategory);
+          if (targetCat === 'game') return this.t('statusPlaying');
+          if (targetCat === 'book') return this.t('statusReading');
+          if (targetCat === 'all' || targetCat === 'leaderboard') return this.t('statusActiveAll');
+          return this.t('statusWatching');
+        }
         const map = {
           'Completed': this.t('statusCompleted'),
           'Planned': this.t('statusPlanned'),
           'On Hold': this.t('statusOnHold'),
           'Dropped': this.t('statusDropped')
         };
-        return map[status] || status;
+        return map[norm] || status;
       },
 
       getDisplayTitle(item) {
@@ -3399,9 +3422,11 @@
       populateControlSelects() {
         const statusSelect = document.getElementById('statusFilter');
         const currentStatus = this.filters.status;
+        const contextCat = this.activeCategory === 'leaderboard' ? this.leaderboardScope : this.activeCategory;
         if (statusSelect) {
           statusSelect.innerHTML = `
             <option value="All">${this.t('statusAll')}</option>
+            <option value="Watching">${this.tStatus('Watching', contextCat)}</option>
             <option value="Completed">${this.t('statusCompleted')}</option>
             <option value="Planned">${this.t('statusPlanned')}</option>
             <option value="On Hold">${this.t('statusOnHold')}</option>
@@ -3410,17 +3435,8 @@
           statusSelect.value = currentStatus;
         }
 
-        const formStatus = document.getElementById('formStatus');
-        if (formStatus) {
-          const curFormStatus = formStatus.value || 'Completed';
-          formStatus.innerHTML = `
-            <option value="Completed">${this.t('statusCompleted')}</option>
-            <option value="Planned">${this.t('statusPlanned')}</option>
-            <option value="On Hold">${this.t('statusOnHold')}</option>
-            <option value="Dropped">${this.t('statusDropped')}</option>
-          `;
-          formStatus.value = curFormStatus;
-        }
+        const currentFormCat = document.getElementById('formCategory')?.value || 'movie';
+        this.updateFormStatusOptions(currentFormCat);
 
         const yearSelect = document.getElementById('yearFilter');
         const currentYear = this.filters.year;
@@ -3460,6 +3476,20 @@
         }
       },
 
+      updateFormStatusOptions(category = 'movie') {
+        const formStatus = document.getElementById('formStatus');
+        if (!formStatus) return;
+        const curFormStatus = this.normalizeStatus(formStatus.value || 'Completed');
+        formStatus.innerHTML = `
+          <option value="Watching">${this.tStatus('Watching', category)}</option>
+          <option value="Completed">${this.t('statusCompleted')}</option>
+          <option value="Planned">${this.t('statusPlanned')}</option>
+          <option value="On Hold">${this.t('statusOnHold')}</option>
+          <option value="Dropped">${this.t('statusDropped')}</option>
+        `;
+        formStatus.value = curFormStatus;
+      },
+
       // ==========================================================================
       // NAVIGATION & FILTER ACTIONS
       // ==========================================================================
@@ -3470,6 +3500,7 @@
         if (this.filters.genre !== 'All' && !availableGenres.includes(this.filters.genre)) {
           this.filters.genre = 'All';
         }
+        this.populateControlSelects();
         this.renderAll();
 
         // Automatically scroll the active tab into view
@@ -3490,6 +3521,7 @@
         if (this.filters.genre !== 'All' && !availableGenres.includes(this.filters.genre)) {
           this.filters.genre = 'All';
         }
+        this.populateControlSelects();
         this.renderAll();
       },
 
@@ -3589,7 +3621,7 @@
           }
 
           // 2. Status Filter
-          if (this.filters.status !== 'All' && item.status !== this.filters.status) return false;
+          if (this.filters.status !== 'All' && this.normalizeStatus(item.status) !== this.filters.status) return false;
 
           // 3. Sub-Type Filter
           if (this.filters.subType !== 'All' && item.subType !== this.filters.subType) return false;
@@ -3883,16 +3915,18 @@
           `;
         }).join('');
       },
-
-      getStatusBadge(status) {
+      getStatusBadge(status, category = null) {
+        const normStatus = this.normalizeStatus(status);
         const styles = {
+          'Watching': 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
           'Completed': 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-          'Planned': 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+          'Planned': 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
           'On Hold': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
           'Dropped': 'bg-rose-500/20 text-rose-300 border-rose-500/40'
         };
-        const cls = styles[status] || 'bg-slate-500/20 text-slate-300 border-slate-500/40';
-        return `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold border backdrop-blur-md ${cls}">${this.tStatus(status)}</span>`;
+        const cls = styles[normStatus] || 'bg-slate-500/20 text-slate-300 border-slate-500/40';
+        const iconPrefix = normStatus === 'Watching' ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse mr-1.5 align-middle"></span>' : '';
+        return `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold border backdrop-blur-md inline-flex items-center ${cls}">${iconPrefix}${this.tStatus(normStatus, category)}</span>`;
       },
 
       getGamePlatformBadge(platform, small = false) {
@@ -4058,7 +4092,7 @@
                   </span>
                   ${gamePlatformBadge}
                 </div>
-                ${this.getStatusBadge(item.status)}
+                ${this.getStatusBadge(item.status, item.category)}
               </div>
 
               <!-- Per-Card Auto-Fill Button for Movies, Series & Games -->
@@ -4173,7 +4207,7 @@
                 ${movieRuntime ? `<span class="text-[11px] font-mono text-indigo-300">• ${this.escapeHtml(movieRuntime.split('(')[0].trim())}</span>` : ''}
                 ${seriesEpInfo ? `<span class="text-[11px] font-mono text-purple-300">• ${this.escapeHtml(seriesEpInfo)}</span>` : ''}
                 ${item.category === 'game' && item.platform ? this.getGamePlatformBadge(item.platform, true) : ''}
-                ${this.getStatusBadge(item.status)}
+                ${this.getStatusBadge(item.status, item.category)}
               </div>
               <h3 class="font-display font-bold text-sm sm:text-base text-white truncate">${this.escapeHtml(displayTitle)}</h3>
               ${secondaryTitle ? `<p class="text-[11px] text-indigo-300/80 truncate">${this.escapeHtml(secondaryTitle)}</p>` : ''}
@@ -4336,7 +4370,7 @@
               </span>
               ${item.category === 'game' && item.platform ? this.getGamePlatformBadge(item.platform) : ''}
               <span class="font-mono text-xs px-2.5 py-1 rounded-full bg-vault-800 text-slate-300">${item.year || '—'}</span>
-              ${this.getStatusBadge(item.status)}
+              ${this.getStatusBadge(item.status, item.category)}
             </div>
 
             <div class="flex items-center gap-2 shrink-0">
@@ -4565,7 +4599,7 @@
           document.getElementById('formTitleRu').value = item.titleRu || '';
           document.getElementById('formTitleRomaji').value = item.titleRomaji || '';
           document.getElementById('formYear').value = item.year || 2024;
-          document.getElementById('formStatus').value = item.status || 'Completed';
+          document.getElementById('formStatus').value = this.normalizeStatus(item.status || 'Completed');
           document.getElementById('formDuration').value = item.duration || '';
           document.getElementById('formSeasons').value = item.seasons || '';
           document.getElementById('formEpisodes').value = item.episodes || '';
@@ -4696,6 +4730,7 @@
         authSelect.innerHTML = sources.map(s => `<option value="${s}">${s}</option>`).join('');
         this.handleAuthoritySourceChange(sources[0]);
 
+        this.updateFormStatusOptions(cat);
         this.renderFormGenres();
       },
 
@@ -5100,7 +5135,8 @@
         if (!s) return 'Completed';
         if (s.includes('viewed') || s.includes('completed') || s.includes('watched') || s.includes('finished') || s.includes('played') || s.includes('просмотрен') || s.includes('завершен') || s.includes('пройден')) return 'Completed';
         if (s.includes('plan') || s.includes('в планах') || s.includes('хочу') || s.includes('watchlist')) return 'Planned';
-        if (s.includes('froz') || s.includes('hold') || s.includes('pause') || s.includes('watch') || s.includes('process') || s.includes('playing') || s.includes('заморож') || s.includes('отложен') || s.includes('смотрю') || s.includes('играю')) return 'On Hold';
+        if (s.includes('watching') || s.includes('смотрю') || s.includes('в процессе') || s.includes('process') || s.includes('playing') || s.includes('играю') || s.includes('reading') || s.includes('читаю') || s.includes('in progress') || s.includes('currently') || s === 'watch') return 'Watching';
+        if (s.includes('froz') || s.includes('hold') || s.includes('pause') || s.includes('заморож') || s.includes('отложен')) return 'On Hold';
         if (s.includes('drop') || s.includes('abandoned') || s.includes('брошен')) return 'Dropped';
         return 'Completed';
       },
